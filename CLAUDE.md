@@ -11,7 +11,7 @@ PumpLab is an **API 610 pump engineering tool** with two independent components:
 
 These do not share runtime code. The GUI reimplements curve fitting in JavaScript; the Python library is used via Jupyter notebooks and `ReportGenerator`.
 
-The project is currently in **Phase 0** (requirements and analysis). All design documents live in `phase0/docs/`.
+Phase 0 (requirements and analysis) is complete. **Phase 1** (v1.0 implementation) is now defined; requirements live in `phase1/phase1_requirements.md`. Implementation has not started. Design documents from Phase 0 live in `phase0/docs/`.
 
 ---
 
@@ -19,7 +19,7 @@ The project is currently in **Phase 0** (requirements and analysis). All design 
 
 ### Running the library
 
-There is no `pyproject.toml` yet. Install dependencies manually:
+There is no `pyproject.toml` yet (Sprint 0 task LIB-01/LIB-02 will add it). Install dependencies manually:
 
 ```bash
 pip install pint numpy matplotlib tabulate python-docx
@@ -31,7 +31,14 @@ The library is used interactively via Jupyter notebooks in `examples/`. Run them
 jupyter notebook examples/
 ```
 
-There is no test suite and no pytest configuration.
+There is no test suite yet. Sprint 0 task LIB-03 adds a `pytest` golden-numbers fixture against `examples/B-432301D.ipynb`. Python ≥ 3.12 required (library uses modern syntax).
+
+### Known bugs (LIB-04, not yet fixed)
+
+- `pint` import error in some environments
+- `PerformanceChecker` crashes on missing attributes instead of handling gracefully
+- `PerformanceFitter` sort order is non-deterministic
+- Hard-coded `"m**3/h"` in fitter must be replaced with configurable unit
 
 ### Architecture
 
@@ -71,6 +78,20 @@ gen.generate_report(report_data)      # report_data is a structured dict
 ```
 
 The `report_data` dict must have keys: `equipment_description`, `design_point` (a `DesignPoint`), and `test_data` (dict of tag → test dicts with `test_summary`, `test_data`, and optional `Curve*` keys for chart images as `BytesIO`).
+
+---
+
+---
+
+## Phase 1 target architecture
+
+Phase 1 introduces a FastAPI backend that wraps the `pump` library. The GUI prototype's client-side curve fitting (JS `polyFit`) will be removed — **CON-01**: all computation lives in the Python library, not the frontend. The frontend calls REST endpoints defined in `API-01` through `API-04`.
+
+Planned endpoints: `/api/analysis/fit-curve`, `/api/analysis/check-tolerance`, `/api/analysis/affinity-correction`, `/api/report/generate`, `/api/project/save`, `/api/project/load`. All request/response types are Pydantic models.
+
+The desktop target (DSK-01 through DSK-07) wraps the same React app in a yet-to-be-chosen desktop shell (Electron, Tauri, or pywebview — ADR-002 pending). Desktop bundles the Python runtime so no separate install is needed.
+
+**Critical path to v1.0:** LIB-01 → LIB-03 → CMP-01 → CMP-04 → VRD-01 → RPT-01
 
 ---
 
@@ -117,3 +138,5 @@ Documents produced during the requirements phase:
 | `glossary-and-units.md` | Domain glossary and unit standard |
 | `adr/` | Architecture decision records |
 | `concepts/` | Per-domain concept pages (flowcharts, governing equations) |
+
+`phase1/phase1_requirements.md` — full v1.0 requirements (functional, NFR, constraints, traceability matrix, acceptance test plan). This is the authoritative source for what Phase 1 must build and how to verify it.
