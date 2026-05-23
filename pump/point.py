@@ -233,12 +233,6 @@ class Point(BasePoint):
     g = Q_(9.81, "m/s**2")
 
     @property
-    def outlet_pressure(
-        self,
-    ):
-        return quantity_factory()
-
-    @property
     def pressure_head(self) -> Q_:
         if not hasattr(self.fluid, "density"):
             raise ValueError("Fluid object does not have a 'density' attribute.")

@@ -204,7 +204,7 @@ class PerformanceCurve:
             if pt.fluid != fluid:
                 raise ValueError("All TestPoints must have the same fluid.")
         self.points = sorted(points) # Sort by capacity
-        self.fitter = PerformanceFitter(points, polynomial_degree=polynomial_degree)
+        self.fitter = PerformanceFitter(self.points, polynomial_degree=polynomial_degree)
 
     def predict_metric(self, capacity, coeffs, unit) -> Q_:
         capacity_value = capacity.to("m**3/h").magnitude
