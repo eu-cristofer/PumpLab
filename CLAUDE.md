@@ -11,7 +11,7 @@ PumpLab is an **API 610 pump engineering tool** with two independent components:
 
 These do not share runtime code. The GUI reimplements curve fitting in JavaScript; the Python library is used via Jupyter notebooks and `ReportGenerator`.
 
-Phase 0 (requirements and analysis) is complete. **Phase 1** (v1.0 implementation) is now defined; requirements live in `phase1/phase1_requirements.md`. Implementation has not started. Design documents from Phase 0 live in `phase0/docs/`.
+Phase 0 (requirements and analysis) is complete. **Phase 1** (v1.0 implementation) is now defined; requirements live in `docs/phase1/guides/phase1_requirements.md` and the sprint-by-sprint plan lives in `docs/phase1/sprints/`. Implementation has not started. Design documents from Phase 0 live in `docs/phase0/`.
 
 ---
 
@@ -19,11 +19,14 @@ Phase 0 (requirements and analysis) is complete. **Phase 1** (v1.0 implementatio
 
 ### Running the library
 
-There is no `pyproject.toml` yet (Sprint 0 task LIB-01/LIB-02 will add it). Install dependencies manually:
+There is no `pyproject.toml` yet (Sprint 0 Task 0.1 will add it — requirements LIB-01/LIB-02). The supported setup uses conda/mamba via `environment.yml` at the repo root:
 
 ```bash
-pip install pint numpy matplotlib tabulate python-docx
+mamba env create -f environment.yml
+mamba activate pump
 ```
+
+`environment.yml` deliberately omits a `channels:` block — configure channels in your local `~/.condarc` (company vs. public registry). It also lists `-e .[dev]` under the `pip:` section, which will only work once `pyproject.toml` exists; until then, install runtime deps with conda only and skip the editable install line, or `pip install pint numpy matplotlib tabulate python-docx` manually.
 
 The library is used interactively via Jupyter notebooks in `examples/`. Run them with:
 
@@ -31,9 +34,9 @@ The library is used interactively via Jupyter notebooks in `examples/`. Run them
 jupyter notebook examples/
 ```
 
-There is no test suite yet. Sprint 0 task LIB-03 adds a `pytest` golden-numbers fixture against `examples/B-432301D.ipynb`. Python ≥ 3.12 required (library uses modern syntax).
+There is no test suite yet. Sprint 0 Task 0.3 adds a `pytest` golden-numbers fixture against `examples/B-432301D.ipynb`. Python ≥ 3.12 required (library uses modern syntax).
 
-### Known bugs (LIB-04, not yet fixed)
+### Known bugs (LIB-04, Sprint 0 Task 0.2 — not yet fixed)
 
 - `pint` import error in some environments
 - `PerformanceChecker` crashes on missing attributes instead of handling gracefully
@@ -91,7 +94,7 @@ Planned endpoints: `/api/analysis/fit-curve`, `/api/analysis/check-tolerance`, `
 
 The desktop target (DSK-01 through DSK-07) wraps the same React app in a yet-to-be-chosen desktop shell (Electron, Tauri, or pywebview — ADR-002 pending). Desktop bundles the Python runtime so no separate install is needed.
 
-**Critical path to v1.0:** LIB-01 → LIB-03 → CMP-01 → CMP-04 → VRD-01 → RPT-01
+**Critical path to v1.0:** LIB-01 → LIB-03 → CMP-01 → CMP-04 → VRD-01 → RPT-01. The sprint plan in `docs/phase1/sprints/` sequences this as Sprint 0 (foundation/proof) → Sprint 1 (hot path: input → curves → tolerance → verdict) → Sprint 2 (MRT, reports, project save, desktop, deploy). Each sprint file has a gate review checklist; do not advance until every box passes.
 
 ---
 
@@ -122,9 +125,11 @@ All state lives in `App()` in `main.jsx`. Screens receive props: `state` (rated,
 
 ---
 
-## Phase 0 documentation (`phase0/docs/`)
+## Documentation layout (`docs/`)
 
-Documents produced during the requirements phase:
+All written design and planning lives under `docs/` (not `phase0/docs/` — that path is from an earlier reorg).
+
+Phase 0 — requirements & analysis (`docs/phase0/`):
 
 | File | Purpose |
 |------|---------|
@@ -136,7 +141,17 @@ Documents produced during the requirements phase:
 | `mvp-scope.md` | MVP scope sign-off |
 | `risks-and-questions.md` | Risk register and open questions |
 | `glossary-and-units.md` | Domain glossary and unit standard |
-| `adr/` | Architecture decision records |
-| `concepts/` | Per-domain concept pages (flowcharts, governing equations) |
+| `phase0_requirements.md` | Phase 0 deliverable checklist & templates |
 
-`phase1/phase1_requirements.md` — full v1.0 requirements (functional, NFR, constraints, traceability matrix, acceptance test plan). This is the authoritative source for what Phase 1 must build and how to verify it.
+Cross-phase:
+
+- `docs/adr/` — Architecture Decision Records (`001-dual-target-architecture.md`)
+- `docs/concepts/` — Per-domain concept pages (performance curves, system resistance, operating point, NPSH, affinity laws, specific speed, series/parallel, pipe hydraulics)
+
+Phase 1 — implementation (`docs/phase1/`):
+
+- `guides/phase1_requirements.md` — authoritative v1.0 requirements (functional, NFR, constraints, traceability matrix, acceptance test plan)
+- `guides/development-workflow.md` — the Plan → Build → Verify → Review → Gate cycle for each sprint
+- `sprints/sprint-0-foundation.md` — kill risks, packaging, first test, stack proof
+- `sprints/sprint-1-hot-path.md` — input → curves → tolerance → verdict
+- `sprints/sprint-2-ship-it.md` — MRT, reports, project save, desktop, deploy
