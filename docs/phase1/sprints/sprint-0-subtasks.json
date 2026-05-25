@@ -1,0 +1,452 @@
+{
+  "source_sprint": "sprint-0-foundation.md",
+  "project": "PumpLab",
+  "generated_at": "2026-05-25T00:00:00Z",
+  "subtask_count": 21,
+  "tasks": [
+    {
+      "parent_task": "0.1",
+      "parent_title": "Library packaging",
+      "subtasks": [
+        {
+          "id": "0.1.1",
+          "title": "Write package smoke test (TDD red)",
+          "description": "Create a pytest module that imports every public pump symbol; it must fail today because the package isn't installable.",
+          "estimated_minutes": 20,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/test_package_install.py", "tests/__init__.py"],
+          "files_to_modify": [],
+          "context_files": ["pump/__init__.py", "pump/point.py", "pump/performance_curve.py", "pump/utilities/fluid.py", "CLAUDE.md"],
+          "prompt": "Create the file tests/test_package_install.py (and an empty tests/__init__.py).\n\nWrite three pytest functions, no fixtures, no classes:\n\n1) def test_top_level_imports():\n     Import these names from the installed package and assert each is not None:\n       from pump import Q_, quantity_factory, Fluid, DesignPoint, TestPoint\n       from pump.performance_curve import PerformanceCurve, PerformanceFitter\n\n2) def test_quantity_factory_returns_pint_quantity():\n     q = quantity_factory(Q_(120, 'm**3/h'))\n     Assert q.magnitude == pytest.approx(120) and str(q.units) == 'meter ** 3 / hour'\n\n3) def test_designpoint_minimal_construction():\n     water = Fluid(name='Water', density=Q_(1000, 'kg/m**3'))\n     dp = DesignPoint(fluid=water, capacity=Q_(120, 'm**3/h'), differential_head=Q_(85, 'm'))\n     Assert dp.capacity.magnitude == pytest.approx(120)\n\nImports at the top: import pytest. Do NOT add try/except around the package imports — they must raise ImportError until pyproject.toml is in place. This test is intentionally red right now (TDD red phase).",
+          "verify": "Run: pytest tests/test_package_install.py -v — expect collection or import errors (RED). Commit the test anyway.",
+          "acceptance_criteria": [
+            "File tests/test_package_install.py exists with exactly three test functions",
+            "Running pytest currently fails (ModuleNotFoundError or similar) — this is the desired TDD red state",
+            "No try/except hides the import failure"
+          ],
+          "depends_on": []
+        },
+        {
+          "id": "0.1.2",
+          "title": "Author pyproject.toml",
+          "description": "Create pyproject.toml at repo root pinning runtime deps and declaring setuptools build backend so `pip install -e .` works.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["pyproject.toml"],
+          "files_to_modify": [],
+          "context_files": ["pump/__init__.py", "pump/performance_curve.py", "pump/utilities/report.py", "environment.yml", "tests/test_package_install.py"],
+          "prompt": "Create the file pyproject.toml at the repository root with this exact content (fill in pinned versions matching environment.yml; if environment.yml gives no version, use the ones below):\n\n[build-system]\nrequires = [\"setuptools>=68\", \"wheel\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"pumplab\"\nversion = \"0.1.0\"\ndescription = \"API 610 pump engineering library\"\nrequires-python = \">=3.12\"\nauthors = [{name = \"Cristofer Antoni\"}]\nreadme = \"README.md\"\ndependencies = [\n  \"pint>=0.23\",\n  \"numpy>=1.26\",\n  \"matplotlib>=3.8\",\n  \"tabulate>=0.9\",\n  \"python-docx>=1.1\",\n]\n\n[project.optional-dependencies]\ndev = [\n  \"pytest>=8.0\",\n  \"httpx>=0.27\",\n  \"pytest-asyncio>=0.23\",\n]\n\n[tool.setuptools.packages.find]\ninclude = [\"pump*\"]\nexclude = [\"tests*\", \"PumpLabGUI*\", \"examples*\", \"docs*\"]\n\n[tool.setuptools.package-data]\npump = [\"templates/*\", \"utilities/locales/*/LC_MESSAGES/*.po\", \"utilities/locales/*/LC_MESSAGES/*.mo\"]\n\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\npythonpath = [\".\"]\n\nDo NOT add a [project.scripts] entry — there is no CLI yet. Do NOT modify any existing files.",
+          "verify": "Run: python -m venv .venv-test && source .venv-test/bin/activate && pip install -e . && python -c 'from pump import Q_, Fluid, DesignPoint; print(\"OK\")'  — must print OK with exit 0.",
+          "acceptance_criteria": [
+            "pyproject.toml parses (python -c 'import tomllib; tomllib.load(open(\"pyproject.toml\",\"rb\"))' succeeds)",
+            "pip install -e . completes without errors in a fresh venv",
+            "All five runtime deps (pint, numpy, matplotlib, tabulate, python-docx) are pinned with lower bounds"
+          ],
+          "depends_on": ["0.1.1"]
+        },
+        {
+          "id": "0.1.3",
+          "title": "Turn the smoke test green",
+          "description": "Run the smoke test from 0.1.1 against the freshly installed package and fix any residual import errors found inside pump/ (do not weaken the test).",
+          "estimated_minutes": 20,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": [],
+          "files_to_modify": ["pump/__init__.py"],
+          "context_files": ["pump/__init__.py", "tests/test_package_install.py", "pyproject.toml"],
+          "prompt": "Run `pytest tests/test_package_install.py -v` inside the .venv-test created in the previous step. The expected outcome is GREEN (3 passed).\n\nIf any import fails:\n- ONLY fix pump/__init__.py re-exports. Re-export Q_, quantity_factory, Fluid, DesignPoint, TestPoint at the top level so `from pump import X` works.\n- Example exports block to ensure exists at the end of pump/__init__.py:\n    from pump.utilities.fluid import Fluid\n    from pump.point import DesignPoint, TestPoint\n    from pint import UnitRegistry\n    # Q_ and quantity_factory should already be defined or imported here\n    __all__ = [\"Q_\", \"quantity_factory\", \"Fluid\", \"DesignPoint\", \"TestPoint\"]\n\nDo NOT alter the test. Do NOT touch any other module. If a test fails for a non-import reason (e.g. a bug in DesignPoint), leave it — that belongs to task 0.2.",
+          "verify": "Run: pytest tests/test_package_install.py -v — must report 3 passed.",
+          "acceptance_criteria": [
+            "pytest reports 3 passed for tests/test_package_install.py",
+            "Only pump/__init__.py was modified",
+            "Test file was not modified"
+          ],
+          "depends_on": ["0.1.2"]
+        }
+      ]
+    },
+    {
+      "parent_task": "0.2",
+      "parent_title": "Fix known bugs",
+      "subtasks": [
+        {
+          "id": "0.2.1",
+          "title": "Bug 1 — pint import (TDD red→green)",
+          "description": "Write a regression test that imports pint via the same path pump uses, then fix the import site so it passes.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/bugs/test_pint_import.py", "tests/bugs/__init__.py"],
+          "files_to_modify": ["pump/__init__.py"],
+          "context_files": ["pump/__init__.py", "docs/phase0/library-audit.md", "pyproject.toml"],
+          "prompt": "Step 1 — RED: Create tests/bugs/test_pint_import.py and an empty tests/bugs/__init__.py.\n\nContents of tests/bugs/test_pint_import.py:\n\n  import importlib\n  import pytest\n\n  def test_pump_imports_without_pint_error():\n      mod = importlib.import_module('pump')\n      assert hasattr(mod, 'Q_'), 'pump must expose Q_'\n      assert hasattr(mod, 'quantity_factory'), 'pump must expose quantity_factory'\n\n  def test_q_creates_quantity():\n      from pump import Q_\n      q = Q_(1.0, 'meter')\n      assert q.magnitude == 1.0\n      assert str(q.units) == 'meter'\n\nRun pytest tests/bugs/test_pint_import.py and confirm it fails OR errors out (red).\n\nStep 2 — GREEN: Open pump/__init__.py. The bug per library-audit §4.2 is that pint is imported with a wrong path (e.g. `from pint.unit_registry import UnitRegistry` instead of `from pint import UnitRegistry`). Replace any broken pint import with:\n\n  from pint import UnitRegistry, Quantity\n  _ureg = UnitRegistry()\n  Q_ = _ureg.Quantity\n\nKeep existing quantity_factory and STANDARD_UNITS code intact. Do NOT touch any other module. Re-run the test — must be green.",
+          "verify": "Run: pytest tests/bugs/test_pint_import.py -v — must report 2 passed.",
+          "acceptance_criteria": [
+            "Test file shows clear red-then-green history (initial run failed before the fix)",
+            "Only pump/__init__.py modified for the fix",
+            "pytest tests/bugs/test_pint_import.py reports 2 passed"
+          ],
+          "depends_on": ["0.1.3"]
+        },
+        {
+          "id": "0.2.2",
+          "title": "Bug 2 — PerformanceChecker missing-attribute guard",
+          "description": "Write a test that constructs a PerformanceChecker with a curve that lacks optional attributes; then add hasattr/default-value guards so it no longer crashes.",
+          "estimated_minutes": 35,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/bugs/test_checker_missing_attrs.py"],
+          "files_to_modify": ["pump/performance_curve.py"],
+          "context_files": ["pump/performance_curve.py", "pump/point.py", "docs/phase0/library-audit.md", "pump/__init__.py"],
+          "prompt": "Step 1 — RED: Create tests/bugs/test_checker_missing_attrs.py:\n\n  import pytest\n  from pump import Q_, Fluid, DesignPoint, TestPoint\n  from pump.performance_curve import PerformanceCurve\n\n  # PerformanceChecker is in pump.performance_curve per library-audit; import accordingly.\n  # If the symbol lives elsewhere in this repo, adjust the import.\n  try:\n      from pump.performance_curve import PerformanceChecker\n  except ImportError:\n      from pump.performance_checker import PerformanceChecker\n\n  @pytest.fixture\n  def minimal_curve_and_design():\n      water = Fluid(name='Water', density=Q_(1000, 'kg/m**3'))\n      dp = DesignPoint(fluid=water, capacity=Q_(100, 'm**3/h'), differential_head=Q_(50, 'm'))\n      pts = [\n          TestPoint(fluid=water, capacity=Q_(80, 'm**3/h'), differential_head=Q_(55, 'm'), breaking_power=Q_(15, 'kW')),\n          TestPoint(fluid=water, capacity=Q_(100, 'm**3/h'), differential_head=Q_(50, 'm'), breaking_power=Q_(17, 'kW')),\n          TestPoint(fluid=water, capacity=Q_(120, 'm**3/h'), differential_head=Q_(43, 'm'), breaking_power=Q_(19, 'kW')),\n      ]\n      curve = PerformanceCurve(test_points=pts)\n      return curve, dp\n\n  def test_checker_handles_missing_optional_attrs(minimal_curve_and_design):\n      curve, dp = minimal_curve_and_design\n      checker = PerformanceChecker(curve=curve, design_point=dp)\n      # Must not raise AttributeError on any optional field check\n      result = checker.check()\n      assert isinstance(result, dict) or hasattr(result, '__dict__')\n\nRun it; confirm it raises AttributeError (red).\n\nStep 2 — GREEN: Open pump/performance_curve.py (or pump/performance_checker.py — wherever PerformanceChecker lives per library-audit §4.3). Every place that does `obj.some_attr` for an OPTIONAL attribute (e.g. shutoff_head, npsh_required, impeller_diameter), replace with:\n\n  value = getattr(obj, 'some_attr', None)\n  if value is None:\n      continue  # or skip that specific tolerance check\n\nDo not change required-attribute access (capacity, differential_head). Do not change tolerance numbers. Re-run the test — must be green.",
+          "verify": "Run: pytest tests/bugs/test_checker_missing_attrs.py -v — must report passed.",
+          "acceptance_criteria": [
+            "Test exercises a curve+design with no optional attrs and passes",
+            "PerformanceChecker uses getattr with default for every optional attribute",
+            "No regression: pytest tests/ -v still has no new failures"
+          ],
+          "depends_on": ["0.2.1"]
+        },
+        {
+          "id": "0.2.3",
+          "title": "Bug 3 — Deterministic fitter sort",
+          "description": "Write a test that fits the same points in two different input orders and asserts identical coefficients; fix PerformanceFitter to sort test points by capacity before fitting.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/bugs/test_fitter_sort.py"],
+          "files_to_modify": ["pump/performance_curve.py"],
+          "context_files": ["pump/performance_curve.py", "pump/point.py", "docs/phase0/library-audit.md"],
+          "prompt": "Step 1 — RED: Create tests/bugs/test_fitter_sort.py:\n\n  import numpy as np\n  from pump import Q_, Fluid, TestPoint\n  from pump.performance_curve import PerformanceFitter\n\n  def _points(order):\n      water = Fluid(name='Water', density=Q_(1000, 'kg/m**3'))\n      raw = [\n          (80,  55, 15),\n          (100, 50, 17),\n          (120, 43, 19),\n          (60,  58, 13),\n      ]\n      raw = [raw[i] for i in order]\n      return [TestPoint(fluid=water,\n                        capacity=Q_(q, 'm**3/h'),\n                        differential_head=Q_(h, 'm'),\n                        breaking_power=Q_(p, 'kW')) for q, h, p in raw]\n\n  def test_fit_is_order_invariant():\n      f1 = PerformanceFitter(test_points=_points([0, 1, 2, 3]))\n      f2 = PerformanceFitter(test_points=_points([3, 1, 0, 2]))\n      np.testing.assert_allclose(f1.head_coeffs, f2.head_coeffs, rtol=1e-10)\n      np.testing.assert_allclose(f1.power_coeffs, f2.power_coeffs, rtol=1e-10)\n\nRun — expect failure or non-deterministic result (red). If attribute names differ from head_coeffs/power_coeffs, adjust to match the actual fitter API discovered in pump/performance_curve.py, but keep the order-invariance assertion.\n\nStep 2 — GREEN: In pump/performance_curve.py, locate PerformanceFitter.__init__ (or wherever points are stored before fitting). Insert ONE line that sorts by capacity in standard units before any polyfit call:\n\n  self._points = sorted(test_points, key=lambda p: p.capacity.to('m**3/h').magnitude)\n\nReplace later uses of `test_points` inside the fitter with `self._points`. Do NOT change polynomial degree or coefficient math. Re-run the test — must be green.",
+          "verify": "Run: pytest tests/bugs/test_fitter_sort.py -v — must report passed.",
+          "acceptance_criteria": [
+            "Test passes with two distinct input orderings producing identical coefficients (rtol=1e-10)",
+            "Fitter sorts by capacity magnitude in m**3/h before fitting",
+            "No other behavior in PerformanceFitter changed"
+          ],
+          "depends_on": ["0.2.2"]
+        },
+        {
+          "id": "0.2.4",
+          "title": "Bug 4 — Remove hard-coded 'm**3/h' string",
+          "description": "Replace the literal 'm**3/h' inside the fitter with the capacity unit from STANDARD_UNITS, with a test that swaps the unit and confirms the fit still works.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/bugs/test_fitter_unit_config.py"],
+          "files_to_modify": ["pump/performance_curve.py"],
+          "context_files": ["pump/performance_curve.py", "pump/__init__.py", "docs/phase0/library-audit.md"],
+          "prompt": "Step 1 — RED: Create tests/bugs/test_fitter_unit_config.py:\n\n  import re\n  import pathlib\n\n  FITTER_SRC = pathlib.Path('pump/performance_curve.py').read_text()\n\n  def test_no_hardcoded_capacity_unit_in_fitter():\n      # The string 'm**3/h' must not appear as a literal anywhere in performance_curve.py.\n      # The unit must come from STANDARD_UNITS instead.\n      assert \"'m**3/h'\" not in FITTER_SRC and '\"m**3/h\"' not in FITTER_SRC, \\\n          \"Hard-coded capacity unit found in pump/performance_curve.py — use STANDARD_UNITS['capacity'] instead.\"\n\n  def test_fit_uses_standard_units_capacity():\n      from pump import Q_, Fluid, TestPoint\n      from pump.performance_curve import PerformanceFitter\n      water = Fluid(name='Water', density=Q_(1000, 'kg/m**3'))\n      pts = [TestPoint(fluid=water, capacity=Q_(q, 'm**3/h'),\n                       differential_head=Q_(h, 'm'),\n                       breaking_power=Q_(p, 'kW'))\n             for q, h, p in [(80, 55, 15), (100, 50, 17), (120, 43, 19)]]\n      f = PerformanceFitter(test_points=pts)\n      # Should not raise; head_coeffs must exist and be finite\n      import numpy as np\n      assert np.all(np.isfinite(f.head_coeffs))\n\nRun — first test fails (red) because the literal is still present.\n\nStep 2 — GREEN: In pump/performance_curve.py:\n  1. At the top: `from pump.utilities.units import STANDARD_UNITS`  (use whichever module actually defines STANDARD_UNITS — check pump/__init__.py to find it).\n  2. Replace every occurrence of the literal 'm**3/h' (or \"m**3/h\") with `STANDARD_UNITS['capacity']`.\n  3. Anywhere the magnitude is extracted, write: `p.capacity.to(STANDARD_UNITS['capacity']).magnitude` instead of `p.capacity.to('m**3/h').magnitude`.\n\nDo not change any other unit string (e.g. 'kW', 'm') in this task. Re-run the test — must be green.",
+          "verify": "Run: pytest tests/bugs/test_fitter_unit_config.py -v && grep -n 'm\\*\\*3/h' pump/performance_curve.py  — pytest passes (2 passed) and grep returns nothing.",
+          "acceptance_criteria": [
+            "Literal 'm**3/h' no longer appears in pump/performance_curve.py",
+            "STANDARD_UNITS['capacity'] is used for the capacity unit reference",
+            "Existing fit test still produces finite coefficients"
+          ],
+          "depends_on": ["0.2.3"]
+        }
+      ]
+    },
+    {
+      "parent_task": "0.3",
+      "parent_title": "Golden numbers test fixture",
+      "subtasks": [
+        {
+          "id": "0.3.1",
+          "title": "Extract golden values from B-432301D notebook",
+          "description": "Read examples/B-432301D.ipynb and write a JSON fixture file with the design point, test points, and expected fitted-curve values at rated flow.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/fixtures/b_432301d_golden.json"],
+          "files_to_modify": [],
+          "context_files": ["examples/B-432301D.ipynb", "pump/point.py", "pump/performance_curve.py"],
+          "prompt": "Open examples/B-432301D.ipynb and read every cell. Extract the numeric inputs and outputs into a single JSON file at tests/fixtures/b_432301d_golden.json.\n\nSchema MUST be:\n\n{\n  \"description\": \"Golden values for pump tag B-432301D, sourced from examples/B-432301D.ipynb\",\n  \"fluid\": { \"name\": \"<string>\", \"density_kg_per_m3\": <number> },\n  \"design_point\": {\n    \"capacity_m3_per_h\": <number>,\n    \"differential_head_m\": <number>,\n    \"speed_rpm\": <number>,\n    \"efficiency_pct\": <number>,\n    \"power_kw\": <number>\n  },\n  \"test_points\": [\n    { \"capacity_m3_per_h\": <number>, \"differential_head_m\": <number>, \"breaking_power_kw\": <number> }\n    // one object per test row in the notebook\n  ],\n  \"expected_at_rated_flow\": {\n    \"head_m\": <number>,\n    \"power_kw\": <number>,\n    \"efficiency_pct\": <number>\n  },\n  \"tolerance\": { \"rel\": 0.02, \"r_squared_min\": 0.99 }\n}\n\nUse EXACT numbers from the notebook — do not round, do not invent. If the notebook has no explicit value for one of expected_at_rated_flow.*, copy the value printed by the existing curve fit cells. Do not create any Python files in this subtask.",
+          "verify": "Run: python -c 'import json; d=json.load(open(\"tests/fixtures/b_432301d_golden.json\")); assert d[\"design_point\"][\"capacity_m3_per_h\"]>0 and len(d[\"test_points\"])>=3; print(\"OK\")' — must print OK.",
+          "acceptance_criteria": [
+            "File tests/fixtures/b_432301d_golden.json exists and parses as JSON",
+            "design_point has all 5 listed keys with positive numeric values",
+            "test_points has at least 3 entries pulled from the notebook",
+            "expected_at_rated_flow has head_m, power_kw, efficiency_pct"
+          ],
+          "depends_on": ["0.2.4"]
+        },
+        {
+          "id": "0.3.2",
+          "title": "Add conftest.py with golden fixtures",
+          "description": "Create tests/conftest.py exposing pytest fixtures that load the JSON and build a DesignPoint, the TestPoint list, and a fitted PerformanceCurve.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/conftest.py"],
+          "files_to_modify": [],
+          "context_files": ["tests/fixtures/b_432301d_golden.json", "pump/__init__.py", "pump/point.py", "pump/performance_curve.py"],
+          "prompt": "Create tests/conftest.py with this exact structure:\n\n  import json\n  import pathlib\n  import pytest\n  from pump import Q_, Fluid, DesignPoint, TestPoint\n  from pump.performance_curve import PerformanceCurve\n\n  FIXTURE_PATH = pathlib.Path(__file__).parent / 'fixtures' / 'b_432301d_golden.json'\n\n  @pytest.fixture(scope='session')\n  def golden_data() -> dict:\n      with FIXTURE_PATH.open() as f:\n          return json.load(f)\n\n  @pytest.fixture\n  def golden_fluid(golden_data) -> Fluid:\n      return Fluid(name=golden_data['fluid']['name'],\n                   density=Q_(golden_data['fluid']['density_kg_per_m3'], 'kg/m**3'))\n\n  @pytest.fixture\n  def golden_design_point(golden_data, golden_fluid) -> DesignPoint:\n      d = golden_data['design_point']\n      return DesignPoint(\n          fluid=golden_fluid,\n          capacity=Q_(d['capacity_m3_per_h'], 'm**3/h'),\n          differential_head=Q_(d['differential_head_m'], 'm'),\n      )\n\n  @pytest.fixture\n  def golden_test_points(golden_data, golden_fluid) -> list[TestPoint]:\n      return [\n          TestPoint(\n              fluid=golden_fluid,\n              capacity=Q_(p['capacity_m3_per_h'], 'm**3/h'),\n              differential_head=Q_(p['differential_head_m'], 'm'),\n              breaking_power=Q_(p['breaking_power_kw'], 'kW'),\n          ) for p in golden_data['test_points']\n      ]\n\n  @pytest.fixture\n  def golden_curve(golden_test_points) -> PerformanceCurve:\n      return PerformanceCurve(test_points=golden_test_points)\n\nDo not add any test functions in this file. Do not modify any other file.",
+          "verify": "Run: pytest --collect-only tests/conftest.py  — must collect without errors (0 items collected is fine; an ImportError is a failure).",
+          "acceptance_criteria": [
+            "tests/conftest.py defines five fixtures: golden_data, golden_fluid, golden_design_point, golden_test_points, golden_curve",
+            "pytest --collect-only succeeds with no errors",
+            "No test functions added (conftest only)"
+          ],
+          "depends_on": ["0.3.1"]
+        },
+        {
+          "id": "0.3.3",
+          "title": "Write golden numbers ±2% test",
+          "description": "Create the actual NFR-06 test: fit the curve and assert head, power, efficiency at rated flow are within ±2% of expected, and R² > 0.99.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/test_golden_numbers.py"],
+          "files_to_modify": [],
+          "context_files": ["tests/conftest.py", "tests/fixtures/b_432301d_golden.json", "pump/performance_curve.py"],
+          "prompt": "Create tests/test_golden_numbers.py:\n\n  import math\n  import pytest\n\n  def _within(actual, expected, rel):\n      assert abs(actual - expected) <= abs(expected) * rel, (\n          f\"expected {expected} ±{rel*100:.1f}%, got {actual} (diff {abs(actual-expected)/abs(expected)*100:.3f}%)\"\n      )\n\n  def test_head_at_rated_flow_within_2pct(golden_curve, golden_data):\n      rated_q = golden_data['design_point']['capacity_m3_per_h']\n      expected = golden_data['expected_at_rated_flow']['head_m']\n      rel = golden_data['tolerance']['rel']\n      head = golden_curve.predict_head(rated_q)  # adjust if signature requires a Q_\n      _within(float(head), expected, rel)\n\n  def test_power_at_rated_flow_within_2pct(golden_curve, golden_data):\n      rated_q = golden_data['design_point']['capacity_m3_per_h']\n      expected = golden_data['expected_at_rated_flow']['power_kw']\n      rel = golden_data['tolerance']['rel']\n      power = golden_curve.predict_breaking_power(rated_q)\n      _within(float(power), expected, rel)\n\n  def test_efficiency_at_rated_flow_within_2pct(golden_curve, golden_data):\n      rated_q = golden_data['design_point']['capacity_m3_per_h']\n      expected = golden_data['expected_at_rated_flow']['efficiency_pct']\n      rel = golden_data['tolerance']['rel']\n      eff = golden_curve.predict_efficiency(rated_q)\n      _within(float(eff), expected, rel)\n\n  def test_r_squared_above_threshold(golden_curve, golden_data):\n      r2_min = golden_data['tolerance']['r_squared_min']\n      r2 = getattr(golden_curve, 'r_squared', None) or golden_curve.fitter.r_squared\n      assert r2 > r2_min, f'R^2 {r2} below threshold {r2_min}'\n\nIf the actual PerformanceCurve API uses different method names or requires Q_ inputs, adjust ONLY the call sites to match (inspect pump/performance_curve.py). Do not weaken the tolerances. Do not modify conftest.py.",
+          "verify": "Run: pytest tests/test_golden_numbers.py -v  — must report 4 passed.",
+          "acceptance_criteria": [
+            "Four tests pass: head, power, efficiency each within ±2%; R² > 0.99",
+            "Tolerance values come from JSON fixture (no magic numbers in test)",
+            "Test file does not redefine fixtures (uses conftest.py)"
+          ],
+          "depends_on": ["0.3.2"]
+        }
+      ]
+    },
+    {
+      "parent_task": "0.4",
+      "parent_title": "Compile translation catalogues",
+      "subtasks": [
+        {
+          "id": "0.4.1",
+          "title": "Compile EN/PT .po → .mo",
+          "description": "Add a Makefile target (or shell script) that runs msgfmt on both .po files and produces .mo binaries in the expected locale directories.",
+          "estimated_minutes": 15,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["scripts/compile_translations.sh", "pump/utilities/locales/en/LC_MESSAGES/messages.mo", "pump/utilities/locales/pt/LC_MESSAGES/messages.mo"],
+          "files_to_modify": [],
+          "context_files": ["pump/utilities/locales/en/LC_MESSAGES/messages.po", "pump/utilities/locales/pt/LC_MESSAGES/messages.po", "pump/utilities/report.py"],
+          "prompt": "Create scripts/compile_translations.sh with this content (make it executable):\n\n  #!/usr/bin/env bash\n  set -euo pipefail\n  ROOT=\"$(cd \"$(dirname \"$0\")/..\" && pwd)\"\n  for lang in en pt; do\n    PO=\"$ROOT/pump/utilities/locales/$lang/LC_MESSAGES/messages.po\"\n    MO=\"$ROOT/pump/utilities/locales/$lang/LC_MESSAGES/messages.mo\"\n    if [[ ! -f \"$PO\" ]]; then\n      echo \"Missing $PO\" >&2; exit 1\n    fi\n    msgfmt \"$PO\" -o \"$MO\"\n    echo \"Compiled $MO\"\n  done\n\nThen execute it (`chmod +x scripts/compile_translations.sh && ./scripts/compile_translations.sh`) so both .mo files are produced and committed.\n\nDo not modify any .po file. Do not modify pump/utilities/report.py.",
+          "verify": "Run: ./scripts/compile_translations.sh && ls pump/utilities/locales/en/LC_MESSAGES/messages.mo pump/utilities/locales/pt/LC_MESSAGES/messages.mo  — both files must exist and be non-empty.",
+          "acceptance_criteria": [
+            "scripts/compile_translations.sh exists and is executable",
+            "Both messages.mo files exist under en/ and pt/ LC_MESSAGES directories",
+            "Each .mo file is non-empty (size > 0)"
+          ],
+          "depends_on": ["0.3.3"]
+        },
+        {
+          "id": "0.4.2",
+          "title": "Translation loading test",
+          "description": "Write a pytest module that loads each locale's catalogue and asserts a known English string translates to the expected Portuguese string.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/test_i18n.py"],
+          "files_to_modify": [],
+          "context_files": ["pump/utilities/locales/en/LC_MESSAGES/messages.po", "pump/utilities/locales/pt/LC_MESSAGES/messages.po", "pump/utilities/report.py"],
+          "prompt": "First, open pump/utilities/locales/en/LC_MESSAGES/messages.po and pump/utilities/locales/pt/LC_MESSAGES/messages.po. Pick ONE msgid that has a non-empty msgstr in BOTH files (e.g. msgid 'Pump Performance Test' or similar). Note the EN msgstr and the PT msgstr.\n\nCreate tests/test_i18n.py:\n\n  import gettext\n  import pathlib\n  import pytest\n\n  LOCALES_DIR = pathlib.Path('pump/utilities/locales').resolve()\n  KNOWN_MSGID = '<paste the msgid you chose>'\n  EXPECTED_EN = '<paste the EN msgstr>'\n  EXPECTED_PT = '<paste the PT msgstr>'\n\n  @pytest.mark.parametrize('lang,expected', [\n      ('en', EXPECTED_EN),\n      ('pt', EXPECTED_PT),\n  ])\n  def test_translation_loads(lang, expected):\n      t = gettext.translation('messages', localedir=str(LOCALES_DIR), languages=[lang])\n      assert t.gettext(KNOWN_MSGID) == expected\n\n  def test_mo_files_exist():\n      for lang in ('en', 'pt'):\n          mo = LOCALES_DIR / lang / 'LC_MESSAGES' / 'messages.mo'\n          assert mo.exists() and mo.stat().st_size > 0\n\nDo NOT invent msgid/msgstr values — they must come verbatim from the .po files. Do NOT modify the locale files.",
+          "verify": "Run: pytest tests/test_i18n.py -v  — must report 3 passed (parametrized 2 + 1 file-exists).",
+          "acceptance_criteria": [
+            "Test uses a real msgid/msgstr pair from the .po files (no placeholders)",
+            "Both EN and PT translations round-trip through gettext",
+            "mo-file-exists test passes"
+          ],
+          "depends_on": ["0.4.1"]
+        }
+      ]
+    },
+    {
+      "parent_task": "0.5",
+      "parent_title": "FastAPI skeleton",
+      "subtasks": [
+        {
+          "id": "0.5.1",
+          "title": "Define Pydantic request/response schemas",
+          "description": "Create pump/api/schemas.py with strongly-typed FitCurveRequest / FitCurveResponse models matching DesignPoint and TestPoint fields.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["pump/api/__init__.py", "pump/api/schemas.py", "tests/api/__init__.py", "tests/api/test_schemas.py"],
+          "files_to_modify": ["pyproject.toml"],
+          "context_files": ["pump/point.py", "pump/utilities/fluid.py", "pyproject.toml"],
+          "prompt": "Step 1 — Add `fastapi>=0.110` and `pydantic>=2.6` to the runtime dependencies array in pyproject.toml.\n\nStep 2 — Create pump/api/__init__.py (empty) and pump/api/schemas.py with this exact content:\n\n  from __future__ import annotations\n  from pydantic import BaseModel, Field, PositiveFloat, ConfigDict\n  from typing import Literal\n\n  class FluidSchema(BaseModel):\n      model_config = ConfigDict(extra='forbid')\n      name: str = Field(min_length=1)\n      density_kg_per_m3: PositiveFloat\n\n  class DesignPointSchema(BaseModel):\n      model_config = ConfigDict(extra='forbid')\n      capacity_m3_per_h: PositiveFloat\n      differential_head_m: PositiveFloat\n      speed_rpm: PositiveFloat | None = None\n      efficiency_pct: float | None = Field(default=None, gt=0, le=100)\n      power_kw: PositiveFloat | None = None\n\n  class TestPointSchema(BaseModel):\n      model_config = ConfigDict(extra='forbid')\n      capacity_m3_per_h: PositiveFloat\n      differential_head_m: PositiveFloat\n      breaking_power_kw: PositiveFloat\n\n  class FitCurveRequest(BaseModel):\n      model_config = ConfigDict(extra='forbid')\n      fluid: FluidSchema\n      design_point: DesignPointSchema\n      test_points: list[TestPointSchema] = Field(min_length=3)\n      degree: int = Field(default=4, ge=2, le=6)\n\n  class FitCurveResponse(BaseModel):\n      flow_rates_m3_per_h: list[float]\n      heads_m: list[float]\n      powers_kw: list[float]\n      efficiencies_pct: list[float]\n      r_squared: float\n      status: Literal['ok'] = 'ok'\n\nStep 3 — Create tests/api/__init__.py (empty) and tests/api/test_schemas.py:\n\n  import pytest\n  from pydantic import ValidationError\n  from pump.api.schemas import FitCurveRequest, TestPointSchema\n\n  def _valid_payload():\n      return {\n          'fluid': {'name': 'Water', 'density_kg_per_m3': 1000},\n          'design_point': {'capacity_m3_per_h': 100, 'differential_head_m': 50},\n          'test_points': [\n              {'capacity_m3_per_h': 80, 'differential_head_m': 55, 'breaking_power_kw': 15},\n              {'capacity_m3_per_h': 100, 'differential_head_m': 50, 'breaking_power_kw': 17},\n              {'capacity_m3_per_h': 120, 'differential_head_m': 43, 'breaking_power_kw': 19},\n          ],\n      }\n\n  def test_valid_request_parses():\n      req = FitCurveRequest.model_validate(_valid_payload())\n      assert req.degree == 4 and len(req.test_points) == 3\n\n  def test_negative_capacity_rejected():\n      payload = _valid_payload()\n      payload['design_point']['capacity_m3_per_h'] = -1\n      with pytest.raises(ValidationError):\n          FitCurveRequest.model_validate(payload)\n\n  def test_too_few_points_rejected():\n      payload = _valid_payload()\n      payload['test_points'] = payload['test_points'][:2]\n      with pytest.raises(ValidationError):\n          FitCurveRequest.model_validate(payload)\n\n  def test_extra_field_rejected():\n      payload = _valid_payload()\n      payload['unknown'] = 1\n      with pytest.raises(ValidationError):\n          FitCurveRequest.model_validate(payload)",
+          "verify": "Run: pip install -e .[dev] && pytest tests/api/test_schemas.py -v  — must report 4 passed.",
+          "acceptance_criteria": [
+            "pump/api/schemas.py defines FluidSchema, DesignPointSchema, TestPointSchema, FitCurveRequest, FitCurveResponse",
+            "All models use model_config = ConfigDict(extra='forbid')",
+            "Test file has 4 tests all passing",
+            "fastapi and pydantic added to pyproject.toml dependencies"
+          ],
+          "depends_on": ["0.4.2"]
+        },
+        {
+          "id": "0.5.2",
+          "title": "Create FastAPI app with CORS and /healthz",
+          "description": "Create pump/api/main.py with a FastAPI instance, permissive CORS, a /healthz endpoint, and Swagger UI at /docs.",
+          "estimated_minutes": 20,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["pump/api/main.py", "tests/api/test_app.py"],
+          "files_to_modify": [],
+          "context_files": ["pump/api/schemas.py", "pump/api/__init__.py", "pyproject.toml"],
+          "prompt": "Create pump/api/main.py with exactly this content:\n\n  from fastapi import FastAPI\n  from fastapi.middleware.cors import CORSMiddleware\n\n  app = FastAPI(\n      title='PumpLab API',\n      version='0.1.0',\n      description='REST surface for the pump engineering library.',\n  )\n\n  app.add_middleware(\n      CORSMiddleware,\n      allow_origins=['*'],     # TODO: restrict in production (Sprint 2)\n      allow_methods=['*'],\n      allow_headers=['*'],\n      allow_credentials=False,\n  )\n\n  @app.get('/healthz')\n  def healthz() -> dict[str, str]:\n      return {'status': 'ok'}\n\nThen create tests/api/test_app.py:\n\n  from fastapi.testclient import TestClient\n  from pump.api.main import app\n\n  client = TestClient(app)\n\n  def test_healthz():\n      r = client.get('/healthz')\n      assert r.status_code == 200\n      assert r.json() == {'status': 'ok'}\n\n  def test_docs_served():\n      r = client.get('/docs')\n      assert r.status_code == 200\n      assert 'swagger' in r.text.lower()\n\n  def test_cors_headers_present():\n      r = client.options('/healthz', headers={\n          'Origin': 'http://localhost:5173',\n          'Access-Control-Request-Method': 'GET',\n      })\n      assert r.headers.get('access-control-allow-origin') == '*'\n\nDo NOT add the fit-curve endpoint in this step — it belongs to 0.5.3.",
+          "verify": "Run: pytest tests/api/test_app.py -v && uvicorn pump.api.main:app --port 8123 &  sleep 2 && curl -sf http://localhost:8123/healthz && kill %1  — pytest passes 3 and curl returns {\"status\":\"ok\"}.",
+          "acceptance_criteria": [
+            "FastAPI app instance exported as `app` from pump.api.main",
+            "/healthz returns 200 with {'status':'ok'}",
+            "/docs serves Swagger UI",
+            "CORS allows all origins on the preflight"
+          ],
+          "depends_on": ["0.5.1"]
+        },
+        {
+          "id": "0.5.3",
+          "title": "Implement POST /api/analysis/fit-curve",
+          "description": "Add the fit-curve endpoint that converts the Pydantic request into pump objects, runs PerformanceCurve.fit, and returns sampled arrays plus R².",
+          "estimated_minutes": 40,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["pump/api/routes_analysis.py"],
+          "files_to_modify": ["pump/api/main.py"],
+          "context_files": ["pump/api/main.py", "pump/api/schemas.py", "pump/__init__.py", "pump/performance_curve.py"],
+          "prompt": "Step 1 — Create pump/api/routes_analysis.py:\n\n  from __future__ import annotations\n  import numpy as np\n  from fastapi import APIRouter, HTTPException\n  from pump import Q_, Fluid, TestPoint\n  from pump.performance_curve import PerformanceCurve\n  from pump.api.schemas import FitCurveRequest, FitCurveResponse\n\n  router = APIRouter(prefix='/api/analysis', tags=['analysis'])\n\n  N_SAMPLES = 50\n\n  @router.post('/fit-curve', response_model=FitCurveResponse)\n  def fit_curve(req: FitCurveRequest) -> FitCurveResponse:\n      try:\n          fluid = Fluid(name=req.fluid.name,\n                        density=Q_(req.fluid.density_kg_per_m3, 'kg/m**3'))\n          test_points = [\n              TestPoint(\n                  fluid=fluid,\n                  capacity=Q_(p.capacity_m3_per_h, 'm**3/h'),\n                  differential_head=Q_(p.differential_head_m, 'm'),\n                  breaking_power=Q_(p.breaking_power_kw, 'kW'),\n              ) for p in req.test_points\n          ]\n          curve = PerformanceCurve(test_points=test_points)\n          q_min = min(p.capacity_m3_per_h for p in req.test_points)\n          q_max = max(p.capacity_m3_per_h for p in req.test_points)\n          q_grid = np.linspace(q_min, q_max, N_SAMPLES)\n          heads = [float(curve.predict_head(q)) for q in q_grid]\n          powers = [float(curve.predict_breaking_power(q)) for q in q_grid]\n          effs = [float(curve.predict_efficiency(q)) for q in q_grid]\n          r2 = float(getattr(curve, 'r_squared', None) or curve.fitter.r_squared)\n      except Exception as exc:  # noqa: BLE001 — boundary translation\n          raise HTTPException(status_code=422, detail=f'fit failed: {exc}')\n      return FitCurveResponse(\n          flow_rates_m3_per_h=q_grid.tolist(),\n          heads_m=heads,\n          powers_kw=powers,\n          efficiencies_pct=effs,\n          r_squared=r2,\n      )\n\nIf the actual PerformanceCurve API uses different method names (inspect pump/performance_curve.py), adjust ONLY the prediction call sites — keep signatures and response shape.\n\nStep 2 — In pump/api/main.py, after `app.add_middleware(...)`, add:\n\n  from pump.api.routes_analysis import router as analysis_router\n  app.include_router(analysis_router)",
+          "verify": "Run: uvicorn pump.api.main:app --port 8123 & sleep 2 && curl -sf -X POST http://localhost:8123/api/analysis/fit-curve -H 'Content-Type: application/json' -d '{\"fluid\":{\"name\":\"Water\",\"density_kg_per_m3\":1000},\"design_point\":{\"capacity_m3_per_h\":100,\"differential_head_m\":50},\"test_points\":[{\"capacity_m3_per_h\":80,\"differential_head_m\":55,\"breaking_power_kw\":15},{\"capacity_m3_per_h\":100,\"differential_head_m\":50,\"breaking_power_kw\":17},{\"capacity_m3_per_h\":120,\"differential_head_m\":43,\"breaking_power_kw\":19}]}' | python -c 'import json,sys; d=json.load(sys.stdin); assert len(d[\"flow_rates_m3_per_h\"])==50; print(\"OK\")' && kill %1",
+          "acceptance_criteria": [
+            "Endpoint registered at POST /api/analysis/fit-curve",
+            "Response contains 4 equal-length arrays (50 samples) plus r_squared",
+            "Validation errors return 422 with descriptive detail",
+            "main.py wires the router via include_router"
+          ],
+          "depends_on": ["0.5.2"]
+        },
+        {
+          "id": "0.5.4",
+          "title": "Integration test for fit-curve",
+          "description": "Add a TestClient-based integration test that posts the golden fixture and asserts the response shape and r_squared > 0.99.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["tests/api/test_fit_curve.py"],
+          "files_to_modify": [],
+          "context_files": ["tests/fixtures/b_432301d_golden.json", "tests/conftest.py", "pump/api/main.py", "pump/api/schemas.py"],
+          "prompt": "Create tests/api/test_fit_curve.py:\n\n  from fastapi.testclient import TestClient\n  from pump.api.main import app\n\n  client = TestClient(app)\n\n  def _payload(golden_data):\n      return {\n          'fluid': {\n              'name': golden_data['fluid']['name'],\n              'density_kg_per_m3': golden_data['fluid']['density_kg_per_m3'],\n          },\n          'design_point': {\n              'capacity_m3_per_h': golden_data['design_point']['capacity_m3_per_h'],\n              'differential_head_m': golden_data['design_point']['differential_head_m'],\n          },\n          'test_points': [\n              {\n                  'capacity_m3_per_h': p['capacity_m3_per_h'],\n                  'differential_head_m': p['differential_head_m'],\n                  'breaking_power_kw': p['breaking_power_kw'],\n              } for p in golden_data['test_points']\n          ],\n      }\n\n  def test_fit_curve_happy_path(golden_data):\n      r = client.post('/api/analysis/fit-curve', json=_payload(golden_data))\n      assert r.status_code == 200, r.text\n      body = r.json()\n      assert body['status'] == 'ok'\n      assert len(body['flow_rates_m3_per_h']) == 50\n      assert len(body['heads_m']) == 50\n      assert len(body['powers_kw']) == 50\n      assert len(body['efficiencies_pct']) == 50\n      assert body['r_squared'] > golden_data['tolerance']['r_squared_min']\n\n  def test_fit_curve_validation_error_missing_field():\n      bad = {'fluid': {'name': 'Water', 'density_kg_per_m3': 1000}}\n      r = client.post('/api/analysis/fit-curve', json=bad)\n      assert r.status_code == 422\n\n  def test_fit_curve_rejects_negative_density(golden_data):\n      bad = _payload(golden_data)\n      bad['fluid']['density_kg_per_m3'] = -1\n      r = client.post('/api/analysis/fit-curve', json=bad)\n      assert r.status_code == 422\n\nUse the existing golden_data fixture from tests/conftest.py. Do not duplicate fixtures.",
+          "verify": "Run: pytest tests/api/test_fit_curve.py -v  — must report 3 passed.",
+          "acceptance_criteria": [
+            "Happy path returns 200, 50-sample arrays, r_squared above threshold",
+            "Missing fields → 422",
+            "Negative density → 422",
+            "Test reuses golden_data fixture from conftest.py"
+          ],
+          "depends_on": ["0.5.3"]
+        }
+      ]
+    },
+    {
+      "parent_task": "0.6",
+      "parent_title": "End-to-end proof",
+      "subtasks": [
+        {
+          "id": "0.6.1",
+          "title": "Scaffold Vite + React build for PumpLabGUI",
+          "description": "Introduce a minimal Vite config so the existing CDN-based React app can be served with a dev server and proxy.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["PumpLabGUI/package.json", "PumpLabGUI/vite.config.js", "PumpLabGUI/src/main.jsx", "PumpLabGUI/index.html.new"],
+          "files_to_modify": [],
+          "context_files": ["PumpLabGUI/index.html", "PumpLabGUI/main.jsx", "PumpLabGUI/app-shell.jsx", "PumpLabGUI/charts.jsx"],
+          "prompt": "Goal: add the smallest possible Vite build so we can run a dev server with a /api proxy, WITHOUT rewriting any existing JSX. Treat the current CDN/Babel setup as legacy; the Vite app re-uses the same source files via standard imports.\n\nCreate PumpLabGUI/package.json:\n\n  {\n    \"name\": \"pumplab-gui\",\n    \"private\": true,\n    \"version\": \"0.1.0\",\n    \"type\": \"module\",\n    \"scripts\": {\n      \"dev\": \"vite\",\n      \"build\": \"vite build\",\n      \"preview\": \"vite preview\"\n    },\n    \"dependencies\": {\n      \"react\": \"^18.3.1\",\n      \"react-dom\": \"^18.3.1\",\n      \"recharts\": \"^2.12.0\"\n    },\n    \"devDependencies\": {\n      \"@vitejs/plugin-react\": \"^4.3.0\",\n      \"vite\": \"^5.4.0\"\n    }\n  }\n\nCreate PumpLabGUI/vite.config.js:\n\n  import { defineConfig } from 'vite';\n  import react from '@vitejs/plugin-react';\n\n  export default defineConfig({\n    plugins: [react()],\n    server: {\n      port: 5173,\n      proxy: {\n        '/api': { target: 'http://localhost:8000', changeOrigin: true },\n      },\n    },\n  });\n\nCreate PumpLabGUI/src/main.jsx:\n\n  import React from 'react';\n  import { createRoot } from 'react-dom/client';\n\n  function Placeholder() {\n    return <div style={{padding: 32, fontFamily: 'sans-serif'}}>PumpLab GUI — Vite bootstrap OK. Wiring legacy components next subtask.</div>;\n  }\n\n  createRoot(document.getElementById('root')).render(<Placeholder />);\n\nCreate PumpLabGUI/index.html.new (we will swap it in later subtask — do NOT overwrite index.html yet):\n\n  <!doctype html>\n  <html lang=\"en\">\n    <head><meta charset=\"utf-8\"/><title>PumpLab</title></head>\n    <body><div id=\"root\"></div><script type=\"module\" src=\"/src/main.jsx\"></script></body>\n  </html>\n\nDo NOT delete the existing CDN index.html in this subtask. Do NOT modify any existing .jsx file.",
+          "verify": "Run: cd PumpLabGUI && npm install && cp index.html.new index.html.vite && npx vite --port 5179 --open=false  — server boots and serves the Placeholder page at http://localhost:5179. Kill the process when verified.",
+          "acceptance_criteria": [
+            "package.json, vite.config.js, src/main.jsx, index.html.new created",
+            "npm install completes without errors",
+            "vite dev server boots on the configured port",
+            "Existing index.html and .jsx files untouched"
+          ],
+          "depends_on": ["0.5.4"]
+        },
+        {
+          "id": "0.6.2",
+          "title": "API client function fitCurve()",
+          "description": "Create a small JS module that POSTs to /api/analysis/fit-curve and returns the parsed response with proper error handling.",
+          "estimated_minutes": 20,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["PumpLabGUI/src/api/pumpClient.js", "PumpLabGUI/src/api/pumpClient.test.js"],
+          "files_to_modify": [],
+          "context_files": ["pump/api/schemas.py", "PumpLabGUI/vite.config.js"],
+          "prompt": "Create PumpLabGUI/src/api/pumpClient.js:\n\n  /**\n   * @typedef {Object} FluidInput\n   * @property {string} name\n   * @property {number} density_kg_per_m3\n   *\n   * @typedef {Object} DesignPointInput\n   * @property {number} capacity_m3_per_h\n   * @property {number} differential_head_m\n   *\n   * @typedef {Object} TestPointInput\n   * @property {number} capacity_m3_per_h\n   * @property {number} differential_head_m\n   * @property {number} breaking_power_kw\n   *\n   * @typedef {Object} FitCurveResponse\n   * @property {number[]} flow_rates_m3_per_h\n   * @property {number[]} heads_m\n   * @property {number[]} powers_kw\n   * @property {number[]} efficiencies_pct\n   * @property {number} r_squared\n   * @property {string} status\n   */\n\n  export class PumpApiError extends Error {\n    constructor(message, status, detail) {\n      super(message);\n      this.name = 'PumpApiError';\n      this.status = status;\n      this.detail = detail;\n    }\n  }\n\n  /**\n   * @param {{ fluid: FluidInput, design_point: DesignPointInput, test_points: TestPointInput[] }} payload\n   * @param {{ baseUrl?: string, signal?: AbortSignal }} [opts]\n   * @returns {Promise<FitCurveResponse>}\n   */\n  export async function fitCurve(payload, opts = {}) {\n    const baseUrl = opts.baseUrl ?? '';\n    const res = await fetch(`${baseUrl}/api/analysis/fit-curve`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json' },\n      body: JSON.stringify(payload),\n      signal: opts.signal,\n    });\n    if (!res.ok) {\n      let detail;\n      try { detail = await res.json(); } catch { detail = await res.text(); }\n      throw new PumpApiError(`fit-curve failed (${res.status})`, res.status, detail);\n    }\n    return /** @type {FitCurveResponse} */ (await res.json());\n  }\n\nCreate PumpLabGUI/src/api/pumpClient.test.js (vitest-style, but we will run it with `node --test` to avoid extra deps):\n\n  import { test } from 'node:test';\n  import assert from 'node:assert/strict';\n  import { fitCurve, PumpApiError } from './pumpClient.js';\n\n  function mockFetch(response) {\n    globalThis.fetch = async () => response;\n  }\n\n  test('fitCurve returns parsed JSON on 200', async () => {\n    mockFetch(new Response(JSON.stringify({ status: 'ok', flow_rates_m3_per_h: [1, 2], heads_m: [3, 4], powers_kw: [5, 6], efficiencies_pct: [7, 8], r_squared: 0.99 }), { status: 200, headers: { 'Content-Type': 'application/json' } }));\n    const out = await fitCurve({ fluid: {}, design_point: {}, test_points: [] });\n    assert.equal(out.r_squared, 0.99);\n  });\n\n  test('fitCurve throws PumpApiError on 422', async () => {\n    mockFetch(new Response(JSON.stringify({ detail: 'bad' }), { status: 422, headers: { 'Content-Type': 'application/json' } }));\n    await assert.rejects(\n      () => fitCurve({}),\n      (err) => err instanceof PumpApiError && err.status === 422\n    );\n  });",
+          "verify": "Run: cd PumpLabGUI && node --test src/api/pumpClient.test.js  — must report 2 passing tests.",
+          "acceptance_criteria": [
+            "fitCurve exported with JSDoc types",
+            "PumpApiError exported and includes status + detail",
+            "Two node:test tests pass: happy path and 422 path"
+          ],
+          "depends_on": ["0.6.1"]
+        },
+        {
+          "id": "0.6.3",
+          "title": "MinimalFitDemo component (form → API → state)",
+          "description": "Create a self-contained React component with hard-coded input fields that posts to fitCurve and stores the response in state.",
+          "estimated_minutes": 35,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["PumpLabGUI/src/components/MinimalFitDemo.jsx"],
+          "files_to_modify": ["PumpLabGUI/src/main.jsx"],
+          "context_files": ["PumpLabGUI/src/api/pumpClient.js", "PumpLabGUI/src/main.jsx"],
+          "prompt": "Create PumpLabGUI/src/components/MinimalFitDemo.jsx:\n\n  import React, { useState } from 'react';\n  import { fitCurve, PumpApiError } from '../api/pumpClient.js';\n\n  const DEFAULT_PAYLOAD = {\n    fluid: { name: 'Water', density_kg_per_m3: 1000 },\n    design_point: { capacity_m3_per_h: 100, differential_head_m: 50 },\n    test_points: [\n      { capacity_m3_per_h: 80, differential_head_m: 55, breaking_power_kw: 15 },\n      { capacity_m3_per_h: 100, differential_head_m: 50, breaking_power_kw: 17 },\n      { capacity_m3_per_h: 120, differential_head_m: 43, breaking_power_kw: 19 },\n    ],\n  };\n\n  export default function MinimalFitDemo() {\n    const [payload, setPayload] = useState(JSON.stringify(DEFAULT_PAYLOAD, null, 2));\n    const [result, setResult] = useState(null);\n    const [error, setError] = useState(null);\n    const [loading, setLoading] = useState(false);\n\n    async function handleSubmit(e) {\n      e.preventDefault();\n      setLoading(true); setError(null); setResult(null);\n      try {\n        const parsed = JSON.parse(payload);\n        const data = await fitCurve(parsed);\n        setResult(data);\n      } catch (err) {\n        setError(err instanceof PumpApiError ? `${err.message}: ${JSON.stringify(err.detail)}` : String(err));\n      } finally {\n        setLoading(false);\n      }\n    }\n\n    return (\n      <section style={{padding: 24, fontFamily: 'system-ui'}}>\n        <h1>PumpLab — End-to-End Proof</h1>\n        <form onSubmit={handleSubmit}>\n          <textarea value={payload} onChange={(e) => setPayload(e.target.value)}\n                    rows={18} cols={70} aria-label='request-json' />\n          <div><button type='submit' disabled={loading}>{loading ? 'Fitting…' : 'Fit curve'}</button></div>\n        </form>\n        {error && <pre data-testid='error' style={{color: 'crimson'}}>{error}</pre>}\n        {result && (\n          <div data-testid='result'>\n            <p>R² = {result.r_squared.toFixed(4)}</p>\n            <p>Samples = {result.flow_rates_m3_per_h.length}</p>\n          </div>\n        )}\n      </section>\n    );\n  }\n\nThen replace the body of PumpLabGUI/src/main.jsx to render MinimalFitDemo:\n\n  import React from 'react';\n  import { createRoot } from 'react-dom/client';\n  import MinimalFitDemo from './components/MinimalFitDemo.jsx';\n\n  createRoot(document.getElementById('root')).render(<MinimalFitDemo />);\n\nDo NOT import any chart library here — that is the next subtask.",
+          "verify": "Run: (in one terminal) uvicorn pump.api.main:app --reload  ;  (in another) cd PumpLabGUI && cp index.html.new index.html.vite && npx vite --port 5173  — open http://localhost:5173, click 'Fit curve' with default payload, confirm 'R² = 0.99xx' and 'Samples = 50' appear.",
+          "acceptance_criteria": [
+            "MinimalFitDemo renders a textarea pre-filled with the default payload",
+            "Clicking 'Fit curve' calls the API and shows R² + sample count on success",
+            "Errors render in a [data-testid=error] block",
+            "main.jsx now mounts MinimalFitDemo"
+          ],
+          "depends_on": ["0.6.2"]
+        },
+        {
+          "id": "0.6.4",
+          "title": "Render fitted curve in Recharts",
+          "description": "Add a Recharts LineChart that plots flow vs head from the fit response so the proof loop ends with a real chart.",
+          "estimated_minutes": 30,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["PumpLabGUI/src/components/CurveChart.jsx"],
+          "files_to_modify": ["PumpLabGUI/src/components/MinimalFitDemo.jsx"],
+          "context_files": ["PumpLabGUI/src/components/MinimalFitDemo.jsx", "PumpLabGUI/package.json"],
+          "prompt": "Create PumpLabGUI/src/components/CurveChart.jsx:\n\n  import React, { useMemo } from 'react';\n  import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';\n\n  /**\n   * @param {{ flows: number[], heads: number[] }} props\n   */\n  export default function CurveChart({ flows, heads }) {\n    const data = useMemo(\n      () => flows.map((q, i) => ({ flow: Number(q.toFixed(2)), head: Number(heads[i].toFixed(2)) })),\n      [flows, heads]\n    );\n    if (!data.length) return null;\n    return (\n      <div style={{width: '100%', height: 360}} data-testid='curve-chart'>\n        <ResponsiveContainer>\n          <LineChart data={data} margin={{top: 16, right: 24, left: 8, bottom: 16}}>\n            <CartesianGrid strokeDasharray='3 3' />\n            <XAxis dataKey='flow' label={{ value: 'Flow (m³/h)', position: 'insideBottom', offset: -4 }} />\n            <YAxis label={{ value: 'Head (m)', angle: -90, position: 'insideLeft' }} />\n            <Tooltip />\n            <Legend />\n            <Line type='monotone' dataKey='head' stroke='#2563eb' dot={false} isAnimationActive={false} />\n          </LineChart>\n        </ResponsiveContainer>\n      </div>\n    );\n  }\n\nIn PumpLabGUI/src/components/MinimalFitDemo.jsx, add at the top:\n\n  import CurveChart from './CurveChart.jsx';\n\nReplace the {result && ( ... )} block with:\n\n  {result && (\n    <div data-testid='result'>\n      <p>R² = {result.r_squared.toFixed(4)} — Samples = {result.flow_rates_m3_per_h.length}</p>\n      <CurveChart flows={result.flow_rates_m3_per_h} heads={result.heads_m} />\n    </div>\n  )}\n\nDo not change anything else in MinimalFitDemo.",
+          "verify": "Run uvicorn + vite as before, open http://localhost:5173, click 'Fit curve', confirm a downward-trending line chart appears with axes labeled 'Flow (m³/h)' and 'Head (m)' and ~50 data points.",
+          "acceptance_criteria": [
+            "CurveChart renders a Recharts LineChart with flow on X and head on Y",
+            "Chart appears below the form only when result is set",
+            "isAnimationActive disabled (deterministic rendering for screenshots)",
+            "MinimalFitDemo passes flows + heads via props"
+          ],
+          "depends_on": ["0.6.3"]
+        },
+        {
+          "id": "0.6.5",
+          "title": "Sprint 0 gate review checklist",
+          "description": "Run every Sprint 0 verification command and write a short markdown report ticking the boxes from the gate-review table; flag anything red.",
+          "estimated_minutes": 25,
+          "priority": "P0",
+          "column": "Backlog",
+          "files_to_create": ["docs/phase1/sprints/sprint-0-gate-report.md"],
+          "files_to_modify": [],
+          "context_files": ["docs/phase1/sprints/sprint-0-foundation.md", "tests/test_golden_numbers.py", "tests/api/test_fit_curve.py"],
+          "prompt": "Run every verification listed in sprint-0-foundation.md §'Sprint 0 gate review' and capture results in docs/phase1/sprints/sprint-0-gate-report.md with this structure:\n\n  # Sprint 0 — Gate Review Report\n  Date: <ISO date>\n  Branch: <git branch>\n  Commit: <git rev-parse HEAD>\n\n  | Check | Command | Result | Notes |\n  |---|---|---|---|\n  | pip install -e . works | `pip install -e .` | ✅ / ❌ | … |\n  | pytest passes with golden numbers | `pytest tests/ -v` | ✅ / ❌ | n passed, n failed |\n  | All 4 audit bugs fixed with tests | `pytest tests/bugs/ -v` | ✅ / ❌ | … |\n  | Translation .mo files compile and load | `pytest tests/test_i18n.py -v` | ✅ / ❌ | … |\n  | FastAPI serves /docs with Swagger UI | `curl -sf http://localhost:8000/docs` | ✅ / ❌ | … |\n  | React → FastAPI → pump → chart cycle works | manual: vite + uvicorn + click 'Fit curve' | ✅ / ❌ | screenshot path: <path or N/A> |\n\n  ## Blockers\n  - <list any ❌ rows with root-cause hypothesis>\n\n  ## Decision\n  - [ ] PROCEED to Sprint 1\n  - [ ] HOLD — fix blockers first\n\nActually run each command (capture the real output, do not invent results). For the manual UI check, run uvicorn + vite, open the page, click the button, and record what happened (success, error message, or chart rendered). Do NOT modify any source file in this subtask — this is purely a report.",
+          "verify": "Open docs/phase1/sprints/sprint-0-gate-report.md and confirm every row has a real ✅/❌ with the actual command output noted; the Decision section must be filled in.",
+          "acceptance_criteria": [
+            "Report file created at the specified path",
+            "All 6 gate-review rows have real results (no placeholders)",
+            "Blockers section either lists concrete issues or says 'none'",
+            "A clear PROCEED or HOLD decision is marked"
+          ],
+          "depends_on": ["0.6.4"]
+        }
+      ]
+    }
+  ]
+}
