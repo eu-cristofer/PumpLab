@@ -207,7 +207,7 @@ class PerformanceCurve:
         self.fitter = PerformanceFitter(self.points, polynomial_degree=polynomial_degree)
 
     def predict_metric(self, capacity, coeffs, unit) -> Q_:
-        capacity_value = capacity.to("m**3/h").magnitude
+        capacity_value = quantity_factory(capacity).magnitude
         metric_value = np.polyval(coeffs, capacity_value)
         return quantity_factory(Q_(metric_value, unit))
 
@@ -308,7 +308,7 @@ class PerformanceCurve:
 
         # Compute fitted values for the given flow
         if capacity is not None:
-            capacity_value = capacity.to("m**3/h").magnitude
+            capacity_value = quantity_factory(capacity).magnitude
             fitted_head = np.polyval(self.fitter.head_coeffs, capacity_value)
     
             if has_power and has_efficiency:
@@ -659,6 +659,11 @@ class PerformanceChecker:
     def _compute_limits(self) -> None:
         """
         Computes the acceptable limits for head, shutoff head, and breaking power.
+
+        Shutoff and breaking-power limits are optional — they're only meaningful
+        when the design point carries `head_shutoff` / `breaking_power`. The
+        attributes are always assigned (defaulting to None) so consumers can
+        check membership rather than catching AttributeError.
         """
         self.minimum_head = round(self.design_point.differential_head - self.head_tolerance * self.design_point.differential_head, 2)
         self.maximum_head = round(self.design_point.differential_head + self.head_tolerance * self.design_point.differential_head, 2)
@@ -666,10 +671,14 @@ class PerformanceChecker:
         if hasattr(self.design_point, "head_shutoff"):
             self.maximum_head_shutoff = round(self.design_point.head_shutoff + self.shutoff_tolerance * self.design_point.head_shutoff, 2)
             self.minimum_head_shutoff = round(self.design_point.head_shutoff - self.shutoff_tolerance * self.design_point.head_shutoff, 2)
+        else:
+            self.maximum_head_shutoff = None
+            self.minimum_head_shutoff = None
 
-        
         if hasattr(self.design_point, "breaking_power"):
             self.maximum_breaking_power = round(self.design_point.breaking_power + self.breaking_power_tolerance * self.design_point.breaking_power, 2)
+        else:
+            self.maximum_breaking_power = None
 
 
     @property
@@ -696,14 +705,15 @@ class PerformanceChecker:
         results = []
         for point in self.curve:
             head_check = self.minimum_head <= point.head <= self.maximum_head
-            shutoff_check = (
-                self.minimum_head_shutoff <= point.head <= self.maximum_head_shutoff
-                if point.capacity.m < 0.1
-                else "N/A"
-            )
+            if point.capacity.m < 0.1 and self.minimum_head_shutoff is not None:
+                shutoff_check = (
+                    self.minimum_head_shutoff <= point.head <= self.maximum_head_shutoff
+                )
+            else:
+                shutoff_check = "N/A"
             power_check = (
                 point.breaking_power <= self.maximum_breaking_power
-                if hasattr(point, "breaking_power") and hasattr(self, "maximum_breaking_power")
+                if hasattr(point, "breaking_power") and self.maximum_breaking_power is not None
                 else "N/A"
             )
 
@@ -737,10 +747,10 @@ class PerformanceChecker:
                 f"{point.head:0.02f~P}",
                 f"{self.minimum_head:0.02f~P}", f"{self.maximum_head:0.02f~P}",
                 f"{point.head:0.02f~P}" if point.capacity.m < 0.1 else "N/A",
-                f"{self.minimum_head_shutoff:0.02f~P}" if hasattr(self, "minimum_head_shutoff") else "N/A",
-                f"{self.maximum_head_shutoff:0.02f~P}" if hasattr(self, "maximum_head_shutoff") else "N/A",
+                f"{self.minimum_head_shutoff:0.02f~P}" if self.minimum_head_shutoff is not None else "N/A",
+                f"{self.maximum_head_shutoff:0.02f~P}" if self.maximum_head_shutoff is not None else "N/A",
                 f"{getattr(point, "breaking_power", 0):0.02f~P}" if hasattr(point, "breaking_power") else "N/A",
-                f"{self.maximum_breaking_power:0.02f~P}" if hasattr(self, "maximum_breaking_power") else "N/A"
+                f"{self.maximum_breaking_power:0.02f~P}" if self.maximum_breaking_power is not None else "N/A"
             ])
 
         headers = [
@@ -770,7 +780,7 @@ class PerformanceChecker:
                      self.maximum_head],
             "Breaking Power": [self.curve.predict_breaking_power(rated_capacity),
                                "-",
-                               self.maximum_breaking_power if hasattr(self, "maximum_breaking_power") else "-"],
+                               self.maximum_breaking_power if self.maximum_breaking_power is not None else "-"],
             "Efficiency": self.curve.predict_efficiency(rated_capacity),
             "Rated Capacity": self.design_point.capacity
         }

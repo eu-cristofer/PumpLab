@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pumplab"
+version = "0.0.1"
+description = "API 610 pump engineering computation library and FastAPI backend."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Cristofer Antoni Souza Costa", email = "cristofercosta@yahoo.com.br" },
+]
+keywords = ["pump", "API 610", "engineering", "centrifugal", "performance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Manufacturing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "pint>=0.23",
+    "numpy>=1.26",
+    "matplotlib>=3.8",
+    "tabulate>=0.9",
+    "python-docx>=1.1",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "httpx>=0.27",
+    "ruff>=0.4",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/cristofercosta/PumpLab"
+Repository = "https://github.com/cristofercosta/PumpLab"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pump*"]
+exclude = ["tests*", "examples*", "PumpLabGUI*", "docs*"]
+
+[tool.setuptools.package-data]
+"pump" = [
+    "templates/*.docx",
+    "utilities/locales/*/LC_MESSAGES/*.po",
+    "utilities/locales/*/LC_MESSAGES/*.mo",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

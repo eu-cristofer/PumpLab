@@ -75,6 +75,8 @@ function ScreenSetup({ t, state, set, unit, project, setProject }) {
         <span className="pill">{state.std.toUpperCase()}</span>
       </div>
 
+      <BackendCurveCard state={state} unit={unit}/>
+
       {/* Project meta */}
       <div className="card" style={{marginBottom: 14}}>
         <div className="card-h">
