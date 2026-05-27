@@ -220,3 +220,41 @@ Before moving to Sprint 1, verify:
 - How to create a REST API that wraps a computation library
 - How to connect a React frontend to a Python backend
 - The discipline of "prove it works before building more"
+
+Companion training notes — one per topic, with the real code from this sprint
+as the reference — live in [docs/phase1/training/](../training/).
+
+---
+
+## Sprint 0 completion log
+
+**Completed:** 2026-05-27 — every gate check is green.
+
+### What shipped
+
+| Task | Files |
+|---|---|
+| 0.1 — Library packaging | [pyproject.toml](../../../pyproject.toml) — `pumplab` package, Python ≥ 3.12, pinned `pint`/`numpy`/`matplotlib`/`tabulate`/`python-docx`, `api` + `dev` extras, pytest config. `pip install -e .` succeeds in a fresh venv. |
+| 0.2 — Fix audit bugs | [pump/performance_curve.py](../../../pump/performance_curve.py) — `_compute_limits` now initialises optional limits to `None`; `acceptable_limits`, `check_summary`, `test_summary_with_limits`, `report_summary` test `is not None` instead of crashing on missing attributes (§4.3). `predict_metric` and `plot_performance_curve` route capacity through `quantity_factory` instead of `to("m**3/h")` (§4.5). Bugs §4.2 and §4.4 were already fixed in the working tree before this sprint — [tests/test_bugs.py](../../../tests/test_bugs.py) carries regression guards for all four. |
+| 0.3 — Golden numbers fixture | [tests/conftest.py](../../../tests/conftest.py) (B-432301D fixtures: `water`, `oil`, `design_point`, `test_points`, `water_curve`) and [tests/test_golden_numbers.py](../../../tests/test_golden_numbers.py) — per-point head/efficiency within ±2 %, R² > 0.99 for head/power/efficiency, fitted-curve prediction at the rated point, full-chain check (speed affinity → fluid correction → polynomial prediction) within 2 % of the design head. |
+| 0.4 — Translation catalogues | [pump/utilities/locales/en/LC_MESSAGES/messages.mo](../../../pump/utilities/locales/en/LC_MESSAGES/) and [pump/utilities/locales/pt/LC_MESSAGES/messages.mo](../../../pump/utilities/locales/pt/LC_MESSAGES/) compiled with `msgfmt`. [tests/test_i18n.py](../../../tests/test_i18n.py) asserts the PT catalogue actually translates (not falling back to identity). |
+| 0.5 — FastAPI skeleton | [pump/api/main.py](../../../pump/api/main.py), [pump/api/schemas.py](../../../pump/api/schemas.py), [pump/api/__init__.py](../../../pump/api/__init__.py) — `POST /api/analysis/fit-curve` accepts a Pydantic-validated request, drives `PerformanceCurve.fit`, and returns measured points + smooth fitted arrays + rated predictions + R². `GET /api/health` and `/docs` (Swagger UI) are served. [tests/test_api.py](../../../tests/test_api.py) exercises the endpoint via `httpx.ASGITransport`. |
+| 0.6 — End-to-end proof | [PumpLabGUI/api-client.jsx](../../../PumpLabGUI/api-client.jsx) (request builder + `fetch` + `BackendCurveCard` SVG chart), registered in [PumpLabGUI/index.html](../../../PumpLabGUI/index.html) and mounted from [PumpLabGUI/screen-setup.jsx](../../../PumpLabGUI/screen-setup.jsx). Clicking **Fit via API** runs the full cycle: form state → `POST` → Python computation → JSON → chart. CORS is wide open for the sprint and locks down in Phase 2. |
+
+### Gate review
+
+| Check | Status |
+|---|---|
+| `pip install -e ".[dev]"` works in a fresh venv | ✅ |
+| `pytest tests/ -v` passes | ✅ 19 passing, 1 unrelated warning (`TestPoint` collected as a test class) |
+| All 4 audit bugs are guarded by tests | ✅ §4.2, §4.3, §4.4, §4.5 |
+| Translation `.mo` files compile and translate at runtime | ✅ PT differs from EN for "Manufacturer", "Efficiency", "Report", … |
+| FastAPI serves `/docs` with Swagger UI | ✅ |
+| React → FastAPI → pump → chart cycle works | ✅ Curl proof + 200 on CORS preflight from `http://localhost:5173` |
+
+### Deviations from the original plan
+
+- **Bugs §4.2 (missing `import pint`) and §4.4 (fitter fed unsorted points)** were already fixed in the working tree before Sprint 0 started. The audit was written against revision `923a99c`; the working tree carries a later, partial fix. The new tests in `tests/test_bugs.py` are regression guards rather than red-then-green — they would fail if either fix were reverted.
+- **Task 0.6 calls for a Vite proxy and `npm run dev`.** The existing GUI is a static HTML/JSX page loaded via the CDN `babel-standalone` transformer — there is no Vite, no `package.json`, no build step. Rather than rewrite the GUI for Sprint 0, the new `api-client.jsx` calls `http://localhost:8000` directly. CORS is set to `*` so this works from any static host (`python -m http.server` on the GUI directory, or opening `index.html` from the filesystem). The "two servers run together" requirement holds: uvicorn on `:8000` + any static host for the GUI. The Vite migration belongs to a later sprint if the desktop shell needs it.
+- **Notebook expected values** (`examples/B-432301D.ipynb`) include a near-zero "shutoff" point at q ≈ 0.00001 m³/h. The API integration test in `tests/test_api.py` ships only the six operating points (no shutoff), which softens the power R² floor to 0.98 / efficiency 0.97. The full seven-point golden fixture still meets the 0.99 bar.
+
