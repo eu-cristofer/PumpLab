@@ -1,11 +1,12 @@
-# Sprint 0 training notes
+# Training notes
 
-These five companion pages unpack the skills exercised in
-[sprint-0-foundation.md](../sprints/sprint-0-foundation.md). Every example
-is the real code that landed during Sprint 0 — not a toy.
+Companion pages that unpack the skills exercised across the Phase 1 sprints.
+Every example is real code that landed in the repo, not a toy.
 
-Read them in order if you're new to the stack; pick the one that matches
-the task at hand if you're hunting for a specific recipe.
+Read them in order if you're new to the stack; pick the one that matches the
+task at hand if you're hunting for a specific recipe.
+
+## Sprint 0 — foundation ([sprint-0-foundation.md](../sprints/sprint-0-foundation.md))
 
 | # | Topic | Why it matters |
 |---|-------|----------------|
@@ -15,8 +16,14 @@ the task at hand if you're hunting for a specific recipe.
 | 4 | [Connecting a React frontend to a Python backend](04-react-frontend-to-python-backend.md) | Two languages, two processes, one user — `fetch`, JSON, CORS, units. |
 | 5 | [Prove it works before building more](05-prove-it-works-before-building-more.md) | The single discipline that turns a sprint plan into a working v1. |
 
+## Sprint 1 — hot path ([sprint-1-hot-path.md](../sprints/sprint-1-hot-path.md))
+
+| # | Topic | Why it matters |
+|---|-------|----------------|
+| 6 | [Frontend toolchain migration](06-frontend-toolchain-migration.md) | Pre-sprint: from CDN prototype to Vite + ES modules, with the Electron sidecar contract in mind. Written under the academic-research convention with APA-cited primary sources. |
+
 Each page follows the same shape:
 - **The principle** — one paragraph.
-- **The Sprint 0 reference** — pointers into the actual files we changed.
+- **The sprint reference** — pointers into the actual files we changed.
 - **The recipe** — step-by-step pattern you can reuse.
-- **Pitfalls** — what to watch for when you do this in Sprint 1+.
+- **Pitfalls** — what to watch for when you do this next.
