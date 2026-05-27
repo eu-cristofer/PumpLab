@@ -109,6 +109,99 @@ common foot-gun. Check it before blaming the venv.
 Edit `pyproject.toml` → add the line under the appropriate dependency list
 → re-run `pip install -e ".[dev]"`. Do not `pip install <foo>` ad-hoc; the
 venv state will drift from the manifest and the next clean clone breaks.
+If the dependency is also needed for daily development on the mamba
+track (see below), add it to `environment.yml` in the same commit.
+
+## The two tracks: mamba/conda and venv/pip
+
+PumpLab supports **two** install paths, and you need to understand both
+or you will fight one of them. The reasons are operational:
+
+- The project's primary install (per [CLAUDE.md](../../../CLAUDE.md) and
+  [environment.yml](../../../environment.yml)) is mamba/conda. Many
+  engineering users run on corporate networks where conda is the only
+  channel they can reach, and where native dependencies (HDF5, MKL, GDAL
+  in adjacent projects) compile cleanly through conda but fight pip's
+  wheel resolution. Mamba is faster than conda and uses the same
+  manifest.
+- CI runners, fresh contributor machines, and isolated test
+  environments use venv + pip — fewer moving parts, no channel config,
+  no `.condarc`. The Sprint 0 gate review installed into a throwaway
+  `.venv-test/` exactly this way.
+
+These tracks meet at one place: `pyproject.toml`. Mamba reads
+`environment.yml`, then in its `pip:` section invokes pip with
+`-e .[dev]` — which reads `pyproject.toml`. So `pyproject.toml` is
+required even on the mamba track; it is *not* a "pip-only" file.
+
+### Track A — mamba/conda (daily-driver setup)
+
+```bash
+mamba env create -f environment.yml
+mamba activate pump
+```
+
+What this does, end to end:
+
+1. Reads [environment.yml](../../../environment.yml), which lists conda
+   packages (`python=3.12`, `numpy`, `pint`, `matplotlib`, the Jupyter
+   stack, …) under `dependencies:`.
+2. Resolves them against whatever channels your `~/.condarc`
+   configured. `environment.yml` deliberately omits a `channels:`
+   block: the right channel depends on whether you're on the company
+   VPN or the open internet. Put the channel in `~/.condarc`, not in
+   the manifest.
+3. After conda packages install, the `pip:` section at the bottom runs
+   `pip install -e .[dev]` inside the new env. This is what wires up
+   `pyproject.toml` — without it, the `pump` package is not importable
+   from a notebook even though numpy etc. are present.
+
+To update the env after pulling new code:
+
+```bash
+mamba env update -f environment.yml
+```
+
+### Track B — venv + pip (CI, fresh contributors, throwaway test envs)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -e ".[dev]"
+```
+
+The Sprint 0 gate review used a `.venv-test/` directory with exactly
+this flow. It is the minimum needed to prove "a fresh machine can
+install and run the package," and it is what GitHub Actions / CI will
+run.
+
+### Choosing a track
+
+| You are… | Use |
+|---|---|
+| On the company VPN with conda channel restrictions | Mamba |
+| Adding a runtime dep that has native code (BLAS, HDF5, geospatial) | Mamba — let conda handle the binary |
+| A new contributor who just cloned the repo | Mamba if you have it; venv+pip if not |
+| Running CI / smoke-testing a clean install | venv + pip |
+| Building the Sprint-2 desktop bundle | venv + pip (the bundle ships its own Python) |
+| Trying to reproduce a teammate's bug | Same track they used |
+
+### Keeping the two manifests in sync
+
+Every runtime dependency must appear in **both** `pyproject.toml` and
+`environment.yml`. Forgetting one is silent: the track you tested still
+works, the other one breaks on `ImportError` for someone else.
+
+A simple discipline:
+
+1. When you `import foo` somewhere in `pump/`, the same commit must add
+   `foo` to `pyproject.toml`'s `[project.dependencies]`.
+2. If `foo` is also useful at notebook / interactive time, add it to
+   `environment.yml`'s `dependencies:` block too — conda's binary
+   wheel is usually faster than pip's source build.
+3. Test the change on both tracks before merging, or at least run CI on
+   one and have a teammate verify the other.
 
 ## Pitfalls
 
@@ -127,4 +220,16 @@ venv state will drift from the manifest and the next clean clone breaks.
 - **`pyproject.toml` is not your channel manifest.** `environment.yml`
   exists alongside it for conda users. Keep both in sync when you add
   runtime dependencies; mismatches are silent until a teammate's conda
-  install lacks a package yours has.
+  install lacks a package yours has. See "The two tracks" above for the
+  discipline.
+- **Hardcoding a `channels:` block in `environment.yml`.** Don't.
+  Channels belong in `~/.condarc` because they depend on whether the
+  machine is on the company VPN or the open internet. The current
+  `environment.yml` has a banner comment about this — leave it intact.
+- **`mamba activate` vs. `conda activate` confusion.** Either works once
+  the env exists; pick one and stay consistent so your shell history is
+  reproducible. Mamba is just a faster front-end to the same env store.
+- **Editing in one track, testing in the other.** If you `pip install`
+  a new package into your mamba env without adding it to
+  `environment.yml`, your env works but no one else's does. Treat both
+  manifests as source-of-truth and the running env as derived state.
